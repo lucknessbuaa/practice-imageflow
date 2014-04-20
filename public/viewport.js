@@ -1,4 +1,9 @@
-define(["jquery", "underscore", "api"], function($, _, api) {
+define(function(require) {
+	require("jquery");
+	var _ = require("underscore");
+	var api = require("api");
+	var loader = require("loader");
+
 	var COLUMNS = 5;
 	var CARD_WIDTH = 180;
 	var GUTTER = 15;
@@ -30,29 +35,40 @@ define(["jquery", "underscore", "api"], function($, _, api) {
 
 	function CellView(cell) {
 		this.cell = cell;
+		this.task = null;
+		this.timestamp = new Date().getTime();
 	};
 
-	CellView.template = _.template(
-		"<div class='cell'>" +
-		"	<img src='<%-link%>' width='<%-width%>' height='<%-height%>'>" +
-		"</div>");
+	CellView.template = _.template("<div data-timestamp='<%= timestamp %>' class='cell'></div>");
 
 	CellView.prototype.onCreate = function() {
-		this.img = this.$el.find("img")[0];
-		this.img.onload = _.bind(function() {
+		var url = this.cell.image.thumburl + "?t=" + this.timestamp
+		this.task = loader.load(url);
+
+		this.task.onload(_.bind(function(img) {
+			img.width = CARD_WIDTH;
+			img.height = this.cell.height;
 			this.$el.css("background", "transparent");
-		}, this);
+			$(img).appendTo(this.el);
+			this.task = null;
+		}, this));
+
+		this.task.onerror(_.bind(function() {
+			console.error('CellView', "fail to load image, #" + this.timestamp);
+			this.task = null;
+		}, this));
 	};
 
 	CellView.prototype.onDestroy = function() {
-		this.img.onload = null;
+		if (this.task) {
+			loader.cancel(this.task);
+			this.task = null;
+		}
 	};
 
 	CellView.prototype.render = function() {
 		var el = this.el = $(CellView.template({
-			width: CARD_WIDTH,
-			height: this.cell.height,
-			link: this.cell.image.thumburl
+			timestamp: this.timestamp
 		}))[0];
 		this.$el = $(el);
 		this.$el.css("left", this.cell.x + "px");
@@ -195,7 +211,6 @@ define(["jquery", "underscore", "api"], function($, _, api) {
 			return c1.bottom() > c2.bottom() ? c1 : c2;
 		});
 		this.$el.css("height", highestCell.bottom() + "px");
-		console.log("hold", this.cells.length, "cells");
 		_ensureCellViews.call(this);
 	}
 
